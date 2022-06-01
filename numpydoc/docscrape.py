@@ -685,7 +685,7 @@ class ClassDoc(NumpyDocString):
             name
             for name, func in inspect.getmembers(self._cls)
             if (
-                (not name.startswith("_") or name in self.extra_public_methods)
+                (not name.startswith("__") or name in self.extra_public_methods)
                 and isinstance(func, Callable)
                 and self._is_show_member(name)
             )
