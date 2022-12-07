@@ -1,6 +1,7 @@
 from collections import namedtuple
 from copy import deepcopy
 import re
+import sys
 import textwrap
 import warnings
 
@@ -980,6 +981,21 @@ doc8 = NumpyDocString(
 )
 
 
+def test_returns_with_roles_no_names():
+    """Make sure colons that are part of sphinx roles are not misinterpreted
+    as type separator in returns section. See gh-428."""
+    docstring = NumpyDocString(
+        """
+        Returns
+        -------
+        str or :class:`NumpyDocString`
+        """
+    )
+    expected = "str or :class:`NumpyDocString`"  # not "str or : class:...
+    assert docstring["Returns"][0].type == expected
+    assert expected in str(docstring)
+
+
 def test_trailing_colon():
     assert doc8["Parameters"][0].name == "data"
 
@@ -1057,52 +1073,6 @@ def test_plot_examples():
         config=cfg,
     )
     assert str(doc).count("plot::") == 1, str(doc)
-
-
-def test_use_blockquotes():
-    cfg = dict(use_blockquotes=True)
-    doc = SphinxDocString(
-        """
-    Parameters
-    ----------
-    abc : def
-        ghi
-    jkl
-        mno
-
-    Returns
-    -------
-    ABC : DEF
-        GHI
-    JKL
-        MNO
-    """,
-        config=cfg,
-    )
-    line_by_line_compare(
-        str(doc),
-        """
-    :Parameters:
-
-        **abc** : def
-
-            ghi
-
-        **jkl**
-
-            mno
-
-    :Returns:
-
-        **ABC** : DEF
-
-            GHI
-
-        JKL
-
-            MNO
-    """,
-    )
 
 
 def test_class_members():
@@ -1653,6 +1623,26 @@ def test__error_location_no_name_attr():
     msg = "Potentially wrong underline length.*Foo.*"
     with pytest.raises(ValueError, match=msg):
         nds._error_location(msg=msg)
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 8), reason="cached_property was added in 3.8"
+)
+def test_class_docstring_cached_property():
+    """Ensure that properties marked with the `cached_property` decorator
+    are listed in the Methods section. See gh-432."""
+    from functools import cached_property
+
+    class Foo:
+        _x = [1, 2, 3]
+
+        @cached_property
+        def val(self):
+            return self._x
+
+    class_docstring = get_doc_object(Foo)
+    assert len(class_docstring["Attributes"]) == 1
+    assert class_docstring["Attributes"][0].name == "val"
 
 
 if __name__ == "__main__":

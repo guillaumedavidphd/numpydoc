@@ -30,8 +30,8 @@ from sphinx.addnodes import pending_xref, desc_content
 from sphinx.util import logging
 from sphinx.errors import ExtensionError
 
-if sphinx.__version__ < "3.0":
-    raise RuntimeError("Sphinx 3.0 or newer is required")
+if sphinx.__version__ < "4.2":
+    raise RuntimeError("Sphinx 4.2 or newer is required")
 
 from .docscrape_sphinx import get_doc_object
 from .validate import validate, ERROR_MSGS
@@ -41,6 +41,19 @@ from . import __version__
 logger = logging.getLogger(__name__)
 
 HASH_LEN = 12
+
+
+def _traverse_or_findall(node, condition, **kwargs):
+    """Triage node.traverse (docutils <0.18.1) vs node.findall.
+
+    TODO: This check can be removed when the minimum supported docutils version
+    for numpydoc is docutils>=0.18.1
+    """
+    return (
+        node.findall(condition, **kwargs)
+        if hasattr(node, "findall")
+        else node.traverse(condition, **kwargs)
+    )
 
 
 def rename_references(app, what, name, obj, options, lines):
@@ -81,8 +94,12 @@ def _is_cite_in_numpydoc_docstring(citation_node):
             return False
 
     sibling_sections = itertools.chain(
-        section_node.traverse(
-            is_docstring_section, include_self=True, descend=False, siblings=True
+        _traverse_or_findall(
+            section_node,
+            is_docstring_section,
+            include_self=True,
+            descend=False,
+            siblings=True,
         )
     )
     for sibling_section in sibling_sections:
@@ -101,7 +118,7 @@ def _is_cite_in_numpydoc_docstring(citation_node):
 
 def relabel_references(app, doc):
     # Change 'hash-ref' to 'ref' in label text
-    for citation_node in doc.traverse(citation):
+    for citation_node in _traverse_or_findall(doc, citation):
         if not _is_cite_in_numpydoc_docstring(citation_node):
             continue
         label_node = citation_node[0]
@@ -121,7 +138,7 @@ def relabel_references(app, doc):
                     and node[0].astext() == f"[{ref_text}]"
                 )
 
-            for xref_node in ref.parent.traverse(matching_pending_xref):
+            for xref_node in _traverse_or_findall(ref.parent, matching_pending_xref):
                 xref_node.replace(xref_node[0], Text(f"[{new_text}]"))
             ref.replace(ref_text, new_text.copy())
 
@@ -129,10 +146,10 @@ def relabel_references(app, doc):
 def clean_backrefs(app, doc, docname):
     # only::latex directive has resulted in citation backrefs without reference
     known_ref_ids = set()
-    for ref in doc.traverse(reference, descend=True):
+    for ref in _traverse_or_findall(doc, reference, descend=True):
         for id_ in ref["ids"]:
             known_ref_ids.add(id_)
-    for citation_node in doc.traverse(citation, descend=True):
+    for citation_node in _traverse_or_findall(doc, citation, descend=True):
         # remove backrefs to non-existent refs
         citation_node["backrefs"] = [
             id_ for id_ in citation_node["backrefs"] if id_ in known_ref_ids
@@ -145,12 +162,17 @@ DEDUPLICATION_TAG = "    !! processed by numpydoc !!"
 def mangle_docstrings(app, what, name, obj, options, lines):
     if DEDUPLICATION_TAG in lines:
         return
+    show_inherited_class_members = app.config.numpydoc_show_inherited_class_members
+    if isinstance(show_inherited_class_members, dict):
+        try:
+            show_inherited_class_members = show_inherited_class_members[name]
+        except KeyError:
+            show_inherited_class_members = True
 
     cfg = {
         "use_plots": app.config.numpydoc_use_plots,
-        "use_blockquotes": app.config.numpydoc_use_blockquotes,
         "show_class_members": app.config.numpydoc_show_class_members,
-        "show_inherited_class_members": app.config.numpydoc_show_inherited_class_members,
+        "show_inherited_class_members": show_inherited_class_members,
         "class_members_toctree": app.config.numpydoc_class_members_toctree,
         "attributes_as_param_list": app.config.numpydoc_attributes_as_param_list,
         "xref_param_type": app.config.numpydoc_xref_param_type,
@@ -251,9 +273,10 @@ def setup(app, get_doc_object_=get_doc_object):
     app.connect("doctree-read", relabel_references)
     app.connect("doctree-resolved", clean_backrefs)
     app.add_config_value("numpydoc_use_plots", None, False)
-    app.add_config_value("numpydoc_use_blockquotes", None, False)
     app.add_config_value("numpydoc_show_class_members", True, True)
-    app.add_config_value("numpydoc_show_inherited_class_members", True, True)
+    app.add_config_value(
+        "numpydoc_show_inherited_class_members", True, True, types=(bool, dict)
+    )
     app.add_config_value("numpydoc_class_members_toctree", True, True)
     app.add_config_value("numpydoc_citation_re", "[a-z0-9_.-]+", True)
     app.add_config_value("numpydoc_attributes_as_param_list", True, True)

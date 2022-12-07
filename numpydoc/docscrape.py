@@ -12,6 +12,13 @@ import copy
 import sys
 
 
+# TODO: Remove try-except when support for Python 3.7 is dropped
+try:
+    from functools import cached_property
+except ImportError:  # cached_property added in Python 3.8
+    cached_property = property
+
+
 def strip_blank_lines(l):
     "Remove leading and trailing blank lines from a list of lines"
     while l and not l[0].strip():
@@ -226,10 +233,14 @@ class NumpyDocString(Mapping):
         params = []
         while not r.eof():
             header = r.read().strip()
-            if " :" in header:
-                arg_name, arg_type = header.split(" :", maxsplit=1)
-                arg_name, arg_type = arg_name.strip(), arg_type.strip()
+            if " : " in header:
+                arg_name, arg_type = header.split(" : ", maxsplit=1)
             else:
+                # NOTE: param line with single element should never have a
+                # a " :" before the description line, so this should probably
+                # warn.
+                if header.endswith(" :"):
+                    header = header[:-2]
                 if single_element_is_type:
                     arg_name, arg_type = "", header
                 else:
@@ -702,7 +713,7 @@ class ClassDoc(NumpyDocString):
                 not name.startswith("_")
                 and (
                     func is None
-                    or isinstance(func, property)
+                    or isinstance(func, (property, cached_property))
                     or inspect.isdatadescriptor(func)
                 )
                 and self._is_show_member(name)

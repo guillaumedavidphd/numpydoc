@@ -34,6 +34,9 @@ ALLOWED_SECTIONS = [
     "References",
     "Examples",
 ]
+# NOTE: The following comment is a sentinel for embedding in the docs - do not
+# modify/remove
+# start-err-msg
 ERROR_MSGS = {
     "GL01": "Docstring text (summary) should start in the line immediately "
     "after the opening quotes (not in the same line, or leaving a "
@@ -91,6 +94,9 @@ ERROR_MSGS = {
     "SA04": 'Missing description for See Also "{reference_name}" reference',
     "EX01": "No examples section found",
 }
+# end-err-msg
+# NOTE: The above comment is a sentinel for embedding in the docs - do not
+# modify/remove
 
 # Ignore these when evaluating end-of-line-"." checks
 IGNORE_STARTS = (" ", "* ", "- ")
@@ -324,7 +330,7 @@ class Validator:
     def parameter_mismatches(self):
         errs = []
         signature_params = self.signature_parameters
-        all_params = tuple(self.doc_all_parameters)
+        all_params = tuple(param.replace("\\", "") for param in self.doc_all_parameters)
         missing = set(signature_params) - set(all_params)
         if missing:
             errs.append(error("PR01", missing_params=str(missing)))
