@@ -1,5 +1,9 @@
 name: numpydoc tests
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number }}-${{ github.event.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -14,7 +18,21 @@ jobs:
         os: [Ubuntu]
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11-dev"]
         sphinx-version:
-          ["sphinx==4.2", "sphinx==4.5", "sphinx==5.0", "sphinx>=5.0"]
+          [
+            "sphinx==4.2",
+            "sphinx==4.5",
+            "sphinx==5.0",
+            "sphinx==5.3",
+            "sphinx==6.0",
+            "sphinx>6.0",
+          ]
+        exclude:
+          - os: Ubuntu
+            python-version: "3.7"
+            sphinx-version: "sphinx==6.0"
+          - os: Ubuntu
+            python-version: "3.7"
+            sphinx-version: "sphinx>6.0"
     steps:
       - uses: actions/checkout@v3
 
@@ -55,6 +73,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt install texlive texlive-latex-extra latexmk dvipng
+          pip install "sphinx<6"
 
       - name: Build documentation
         run: |
@@ -106,6 +125,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt install texlive texlive-latex-extra latexmk dvipng
+          pip install "sphinx<6"
 
       - name: Build documentation
         run: |
